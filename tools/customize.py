@@ -185,8 +185,10 @@ def patch(root):
 
     manifest = root / "app/src/main/AndroidManifest.xml"
     def manifest_patch(s):
-        s = replace_one(s, 'android:icon="@mipmap/ic_launcher"',
-            'android:icon="@drawable/cybernet_icon"', "app icon")
+        if 'android:icon="@mipmap/ic_launcher"' not in s:
+            raise RuntimeError("upstream launcher icons not found")
+        s = s.replace('android:icon="@mipmap/ic_launcher"',
+                      'android:icon="@drawable/cybernet_icon"')
         s = replace_one(s, '<uses-permission android:name="android.permission.INTERNET" />',
             '''<uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />''', "installer permission")
