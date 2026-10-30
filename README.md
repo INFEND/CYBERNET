@@ -17,6 +17,12 @@ The developer has a private one-line base64 signing bundle generated separately.
 
 After adding the secret, open [Actions](https://github.com/ANTIFERMENT/CYBERNET/actions/workflows/android.yml), select **Run workflow**. GitHub will sign the APK with the stable certificate and publish `CYBERNET.apk`, `update.json`, and corresponding GPL sources into Releases. Without the secret, the workflow builds only a debug APK artifact. Never commit private signing keys or passwords to this public repository.
 
+Permanent release certificate SHA-256 fingerprint (safe to publish):
+
+```
+A6:0C:7F:B2:73:44:9A:1D:9B:4C:A6:16:65:DA:A7:24:AF:75:1B:9E:CB:5A:EF:6D:02:9D:14:73:6F:73:23:2F
+```
+
 For regular use open [Actions](https://github.com/ANTIFERMENT/CYBERNET/actions/workflows/android.yml), run the workflow, and install the artifact/release. Future releases use the same signing certificate.
 
 ## Source and licensing
