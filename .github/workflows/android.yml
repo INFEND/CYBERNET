@@ -56,6 +56,9 @@ jobs:
           test "$(git -C upstream rev-parse HEAD)" = "$PINNED_UPSTREAM"
           git -C upstream rev-parse HEAD > UPSTREAM_COMMIT.txt
 
+      - name: Apply CYBERNET source overlay
+        run: python3 tools/customize.py upstream/V2rayNG
+
       - name: Compile native HEV tunnel
         working-directory: upstream
         shell: bash
@@ -76,9 +79,6 @@ jobs:
           echo "Using AndroidLibXrayLite $CORE_TAG"
           gh release download "$CORE_TAG" --repo 2dust/AndroidLibXrayLite --pattern 'libv2ray.aar' --dir upstream/V2rayNG/app/libs
           test -s upstream/V2rayNG/app/libs/libv2ray.aar
-
-      - name: Apply CYBERNET source overlay
-        run: python3 tools/customize.py upstream/V2rayNG
 
       - name: Build debug APK with native VPN
         working-directory: upstream/V2rayNG
