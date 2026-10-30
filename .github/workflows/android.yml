@@ -1,0 +1,174 @@
+name: CYBERNET Android + OTA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/**'
+      - 'overlay/**'
+      - 'version.properties'
+      - 'UPSTREAM.txt'
+      - '.github/workflows/android.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cybernet-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    env:
+      PINNED_UPSTREAM: aa4b05503a504a3f2e43818e6ee8ebf1caaa3df0
+      CYBERNET_SIGNING_BUNDLE: ${{ secrets.CYBERNET_SIGNING_BUNDLE }}
+    steps:
+      - name: Checkout CYBERNET
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install Android SDK API 37
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platforms;android-37.0 build-tools;37.0.0 platform-tools'
+
+      - name: Install Android NDK 30
+        shell: bash
+        run: |
+          yes | sdkmanager --install 'ndk;30.0.16248370' || true
+          test -d "$ANDROID_HOME/ndk/30.0.16248370"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
+
+      - name: Clone pinned upstream source and native submodules
+        shell: bash
+        run: |
+          git clone https://github.com/2dust/v2rayNG.git upstream
+          git -C upstream checkout "$PINNED_UPSTREAM"
+          git -C upstream submodule update --init --recursive
+          test "$(git -C upstream rev-parse HEAD)" = "$PINNED_UPSTREAM"
+          git -C upstream rev-parse HEAD > UPSTREAM_COMMIT.txt
+
+      - name: Compile native HEV tunnel
+        working-directory: upstream
+        shell: bash
+        run: bash compile-hevtun.sh
+
+      - name: Add HEV tunnel libraries
+        shell: bash
+        run: |
+          mkdir -p upstream/V2rayNG/app/libs
+          cp -r upstream/libs/. upstream/V2rayNG/app/libs/
+
+      - name: Obtain core AAR for pinned submodule
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CORE_TAG="$(git -C upstream/AndroidLibXrayLite describe --tags --abbrev=0)"
+          echo "Using AndroidLibXrayLite $CORE_TAG"
+          gh release download "$CORE_TAG" --repo 2dust/AndroidLibXrayLite --pattern 'libv2ray.aar' --dir upstream/V2rayNG/app/libs
+          test -s upstream/V2rayNG/app/libs/libv2ray.aar
+
+      - name: Apply CYBERNET source overlay
+        run: python3 tools/customize.py upstream/V2rayNG
+
+      - name: Build debug APK with native VPN
+        working-directory: upstream/V2rayNG
+        shell: bash
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          chmod +x gradlew
+          ./gradlew :app:assemblePlaystoreDebug --no-daemon --stacktrace
+
+      - name: Collect debug APK
+        shell: bash
+        run: |
+          mkdir -p output
+          APK="$(find upstream/V2rayNG/app/build/outputs/apk/playstore/debug -type f -name '*universal*.apk' -print -quit)"
+          test -n "$APK"
+          cp "$APK" output/CYBERNET-debug.apk
+          sha256sum output/CYBERNET-debug.apk > output/DEBUG-SHA256SUMS
+
+      - name: Upload installable debug artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CYBERNET-Android-Debug
+          path: |
+            output/CYBERNET-debug.apk
+            output/DEBUG-SHA256SUMS
+            UPSTREAM_COMMIT.txt
+          if-no-files-found: error
+
+      - name: Configure stable release signing
+        id: signing
+        shell: bash
+        run: |
+          if [ -n "$CYBERNET_SIGNING_BUNDLE" ]; then
+            python3 tools/decode_signing.py
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::OTA release not published. Add CYBERNET_SIGNING_BUNDLE secret once."
+          fi
+
+      - name: Build and verify stable signed release APK
+        if: steps.signing.outputs.ready == 'true'
+        working-directory: upstream/V2rayNG
+        shell: bash
+        run: |
+          ./gradlew :app:assemblePlaystoreRelease --no-daemon --stacktrace \
+            "-Pandroid.injected.signing.store.file=$CYBERNET_KEYSTORE_PATH" \
+            "-Pandroid.injected.signing.store.password=$CYBERNET_STORE_PASSWORD" \
+            "-Pandroid.injected.signing.key.alias=$CYBERNET_KEY_ALIAS" \
+            "-Pandroid.injected.signing.key.password=$CYBERNET_KEY_PASSWORD"
+          APK="$(find app/build/outputs/apk/playstore/release -type f -name '*universal*.apk' -print -quit)"
+          test -n "$APK"
+          cp "$APK" ../../output/CYBERNET.apk
+          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --print-certs ../../output/CYBERNET.apk
+
+      - name: Assemble OTA metadata, hashes and complete corresponding sources
+        if: steps.signing.outputs.ready == 'true'
+        shell: bash
+        run: |
+          python3 tools/make_manifest.py
+          cp UPSTREAM_COMMIT.txt output/
+          cp upstream/LICENSE output/GPL-3.0.txt
+          tar --exclude-vcs --exclude='**/build' --exclude='**/.gradle' \
+              --exclude='**/*.apk' --exclude='**/*.aar' \
+              --exclude='**/*.so' --exclude='**/*.o' \
+              -czf output/CYBERNET-corresponding-source.tar.gz \
+              upstream/AndroidLibXrayLite upstream/hev-socks5-tunnel \
+              upstream/V2rayNG tools overlay version.properties UPSTREAM.txt README.md
+          (cd output && sha256sum CYBERNET.apk CYBERNET-corresponding-source.tar.gz > SHA256SUMS)
+
+      - name: Publish GitHub Release and permanent OTA endpoints
+        if: steps.signing.outputs.ready == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(sed -n 's/^VERSION_NAME=//p' version.properties)"
+          TAG="v$VERSION"
+          if gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "::notice::Release $TAG already exists; bump version.properties to publish next version."
+            exit 0
+          fi
+          gh release create "$TAG" \
+            output/CYBERNET.apk \
+            output/update.json \
+            output/SHA256SUMS \
+            output/GPL-3.0.txt \
+            output/UPSTREAM_COMMIT.txt \
+            output/CYBERNET-corresponding-source.tar.gz \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "CYBERNET $VERSION" \
+            --notes "Signed Android APK, Russian AMOLED client, SHA-256 OTA manifest and corresponding GPL source." \
+            --latest
