@@ -1,0 +1,13 @@
+# Secrets and signing files must never be committed
+*.jks
+*.keystore
+*.p12
+signing-secret*
+.env
+upstream/
+build/
+.gradle/
+local.properties
+*.apk
+*.part
+__pycache__/
