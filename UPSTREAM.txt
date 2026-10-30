@@ -1,0 +1,6 @@
+Repository: https://github.com/2dust/v2rayNG
+Pinned commit: aa4b05503a504a3f2e43818e6ee8ebf1caaa3df0
+Root license: GPL-3.0 (upstream LICENSE)
+Build checkout: git -C upstream checkout aa4b05503a504a3f2e43818e6ee8ebf1caaa3df0
+Required submodules: AndroidLibXrayLite, hev-socks5-tunnel.
+All CYBERNET modifications supplied as text source files in this repository.
