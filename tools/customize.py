@@ -144,6 +144,19 @@ def patch(root):
                         onCheck = { onAction(MainAction.TestCurrentServer) }
                     )
                     if (groups.size > 1) {""", "connected screen")
+        s = replace_one(s, """                MainBottomBar(
+                    displayText = displayText,
+                    isRunning = isRunning,
+                    isDarkTheme = isDarkTheme,
+                    onAction = onAction
+                )""", """                CybernetNavigation(
+                    connected = isRunning,
+                    status = displayText,
+                    onToggle = { onAction(MainAction.ToggleService) },
+                    onSubscriptions = { onNavigate(MainDestination.Subscriptions) },
+                    onRouting = { onNavigate(MainDestination.Routing) },
+                    onSettings = { onNavigate(MainDestination.Settings) }
+                )""", "bottom navigation")
         s = replace_one(s, """            if (groups.isNotEmpty()) {
                 Column(""",
                         """            if (groups.isEmpty()) {
@@ -167,6 +180,7 @@ def patch(root):
     overlay = TOP / "overlay"
     main_dir = root / "app/src/main/java/com/v2ray/ang"
     shutil.copyfile(overlay / "CybernetHero.kt", main_dir / "ui/main/CybernetHero.kt")
+    shutil.copyfile(overlay / "CybernetNavigation.kt", main_dir / "ui/main/CybernetNavigation.kt")
     shutil.copyfile(overlay / "CheckUpdateActivity.kt", main_dir / "ui/checkupdate/CheckUpdateActivity.kt")
 
     manifest = root / "app/src/main/AndroidManifest.xml"
