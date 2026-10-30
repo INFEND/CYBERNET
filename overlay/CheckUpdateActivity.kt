@@ -55,7 +55,7 @@ private data class CybernetUpdate(
 class CheckUpdateActivity : BaseComponentActivity() {
     private var checking by mutableStateOf(false)
     private var downloading by mutableStateOf(false)
-    private var progress by mutableIntStateOf(0)
+    private var downloadPercent by mutableIntStateOf(0)
     private var status by mutableStateOf("Проверка релизов CYBERNET")
     private var latest by mutableStateOf<CybernetUpdate?>(null)
     private var downloadedApk: File? = null
@@ -137,7 +137,7 @@ class CheckUpdateActivity : BaseComponentActivity() {
             return
         }
         downloading = true
-        progress = 0
+        downloadPercent = 0
         status = "Скачиваем проверенный APK…"
         lifecycleScope.launch {
             try {
@@ -166,7 +166,7 @@ class CheckUpdateActivity : BaseComponentActivity() {
                                     output.write(buffer, 0, n)
                                     if (expectedSize > 0) {
                                         val current = ((total * 100) / expectedSize).toInt().coerceIn(0, 99)
-                                        if (current != progress) withContext(Dispatchers.Main) { progress = current }
+                                        if (current != downloadPercent) withContext(Dispatchers.Main) { downloadPercent = current }
                                     }
                                 }
                             }
@@ -183,7 +183,7 @@ class CheckUpdateActivity : BaseComponentActivity() {
                         if (temp.exists()) temp.delete()
                     }
                 }
-                progress = 100
+                downloadPercent = 100
                 downloadedApk = apk
                 status = "Файл проверен. Подтвердите установку Android."
                 installApk(apk)
@@ -233,10 +233,10 @@ class CheckUpdateActivity : BaseComponentActivity() {
                 Text(status, style = MaterialTheme.typography.bodyLarge)
                 if (downloading) {
                     LinearProgressIndicator(
-                        progress = { progress / 100f },
+                        progress = { downloadPercent / 100f },
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Text("Загружено: $progress%")
+                    Text("Загружено: $downloadPercent%")
                 }
                 val release = latest
                 if (release != null) {
