@@ -125,7 +125,10 @@ def patch(root):
         "Russian first launch"))
     for path in ("values/themes.xml", "values-night/themes.xml"):
         p = root / "app/src/main/res" / path
-        modify(p, lambda s: s.replace("#FF1C1B1F", "#FF000000"))
+        original = p.read_text(encoding="utf-8")
+        updated = original.replace("#FF1C1B1F", "#FF000000")
+        if updated != original:
+            p.write_text(updated, encoding="utf-8")
 
     ui = root / "app/src/main/java/com/v2ray/ang/ui/main/MainScreen.kt"
     def main_patch(s):
